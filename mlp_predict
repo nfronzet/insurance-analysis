@@ -1,0 +1,79 @@
+import numpy as np
+import keras
+from keras.models import Model, Sequential
+from keras.layers import Input, Dense, Dropout
+from cos_modelfiles import SaveLoad
+import time
+
+import types
+import pandas as pd
+from botocore.client import Config
+import ibm_boto3
+
+def __iter__(self): return 0
+
+def return_predictions(x):
+    return np.round(x)
+
+# @hidden_cell
+# The following code accesses a file in your IBM Cloud Object Storage. It includes your credentials.
+# You might want to remove those credentials before you share your notebook.
+cos_credentials = {'SERVICE_NAME': '******',
+    'IBM_API_KEY_ID': '******',
+    'IBM_AUTH_ENDPOINT': '******',
+    'config': '******',
+    'ENDPOINT_URL': '******',
+    'BUCKET': '******'}
+
+cos = ibm_boto3.client(service_name=cos_credentials['SERVICE_NAME'],
+    ibm_api_key_id=cos_credentials['IBM_API_KEY_ID'],
+    ibm_auth_endpoint=cos_credentials['IBM_AUTH_ENDPOINT'],
+    config=cos_credentials['config'],
+    endpoint_url=cos_credentials['ENDPOINT_URL'])
+
+body = cos.get_object(Bucket='******',Key='insurance3_processed.csv')['Body']
+# add missing __iter__ method, so pandas accepts body as file-like object
+if not hasattr(body, "__iter__"): body.__iter__ = types.MethodType( __iter__, body )
+
+df = pd.read_csv(body)
+
+#extract training and test sets
+n_rows = len(df)
+
+data = df.loc[0:n_rows-1,'provincia_AG':'cilindrata'].values
+#labels = df.loc[0:n_rows-1,'INC':'TUT']
+
+#define model
+inputs = Input(shape=data.shape[1:])
+common_branch = Dense(256, activation='relu', input_shape=data.shape[1:])(inputs)
+common_branch = Dropout(0.2)(common_branch)
+common_branch = Dense(128, activation='relu')(common_branch)
+common_branch = Dropout(0.2)(common_branch)
+common_branch = Dense(128, activation='relu')(common_branch)
+common_branch = Dropout(0.2)(common_branch)
+common_branch = Dense(64, activation='relu')(common_branch)
+common_branch = Dropout(0.2)(common_branch)
+
+inc_branch = Dense(1, activation='sigmoid', name='inc_output')(common_branch)
+fur_branch = Dense(1, activation='sigmoid', name='fur_output')(common_branch)
+esp_branch = Dense(1, activation='sigmoid', name='esp_output')(common_branch)
+cri_branch = Dense(1, activation='sigmoid', name='cri_output')(common_branch)
+evn_branch = Dense(1, activation='sigmoid', name='evn_output')(common_branch)
+inf_branch = Dense(1, activation='sigmoid', name='inf_output')(common_branch)
+ass_branch = Dense(1, activation='sigmoid', name='ass_output')(common_branch)
+tut_branch = Dense(1, activation='sigmoid', name='tut_output')(common_branch)
+
+model = Model(inputs=inputs, outputs=[inc_branch, fur_branch, esp_branch, cri_branch, evn_branch, inf_branch, ass_branch, tut_branch])
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+#try to load model weights
+try:
+    weights = SaveLoad.cos_get_weights(cos, cos_credentials, 'ins_mlp_weights.txt')
+    model.set_weights(weights)
+except:
+    print('Unable to load weights file')
+    raise
+
+(inc, fur, esp, cri, evn, inf, ass, tut) = return_predictions(model.predict(data))
+for i in range(len(inc)):
+    print('Predicted values: {:d} {:d} {:d} {:d} {:d} {:d} {:d} {:d}'.format(int(inc[i]),int(fur[i]),int(esp[i]),int(cri[i]),int(evn[i]),int(inf[i]),int(ass[i]),int(tut[i])))
