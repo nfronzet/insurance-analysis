@@ -22,7 +22,7 @@ cos_credentials = {
     'BUCKET': '*****'
 }
 
-cos = ibm_boto3.client(service_name='s3',
+cos = ibm_boto3.client(service_name='******',
     ibm_api_key_id=cos_credentials['IBM_API_KEY_ID'],
     ibm_service_instance_id=cos_credentials['IAM_SERVICE_ID'],
     ibm_auth_endpoint=cos_credentials['IBM_AUTH_ENDPOINT'],
